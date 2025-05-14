@@ -27,13 +27,12 @@ class PoissonSolver2D():
         return exp1 - exp2
     
     def _update_ro_grid(self):
-        """
-        Updates ro grid with the charge density.
-        grid (np.array): grid to be updated
-        """
+        N = (self.size - 1) // 2  # N = 31 dla rozmiaru 63
         for i in range(self.size):
             for j in range(self.size):
-                self.ro_grid[i,j] = self.ro(i,j)
+                x = i - N  # przeskalowanie indeksu na współrzędną x
+                y = j - N  # przeskalowanie indeksu na współrzędną y
+                self.ro_grid[i, j] = self.ro(x, y)
 
     def _update_u_grid(self):
         """
@@ -75,8 +74,8 @@ class PoissonSolver2D():
         """
         s = 0
         dx2 = self.dx**2
-        for x in range(1, self.size - 2):
-            for y in range(1, self.size - 2):
+        for x in range(1, self.size - 1):
+            for y in range(1, self.size - 1):
                 u_1 = self.u_grid[x, y]
                 fst = 0.5 * (self.u_grid[x+1, y] + self.u_grid[x-1, y] - 2 * u_1) / dx2
                 snd = 0.5 * (self.u_grid[x, y+1] + self.u_grid[x, y-1] - 2 * u_1) / dx2
@@ -111,7 +110,12 @@ class PoissonSolver2DFast(PoissonSolver2D):
                 self.u_grid[i,j] = (1-w) * self.u_grid[i,j] + w*(
                                 (self.u_grid[i+1,j] + self.u_grid[i-1, j]+
                                 self.u_grid[i,j+1] + self.u_grid[i, j-1]+
-                                self.ro(i,j)*self.dx**2))/4
+                                self.ro_grid[i,j]*self.dx**2))/4
+
+
+
+
+
 
 
 class PS2DFunctionalMinimization(PoissonSolver2D):
@@ -138,16 +142,23 @@ class PS2DFunctionalMinimization(PoissonSolver2D):
         if abs(i) >= self.size-1 or abs(j) >= self.size-1 or i<=0 or j<=0:
             raise ValueError(f"i={i} or j={j} out of grid size index that is in (0, {self.size-1})!") 
         s = 0
-        dx2 = self.dx**2
-        # Use valid index ranges only
-        for x in range(i-1, i+1):
-            for y in range(j-1,  j+1):
-                u_1 = self.u_grid[x, y] + dlt
-                fst = 0.5 * (self.u_grid[x+1, y] + self.u_grid[x-1, y] - 2 * u_1) / dx2
-                snd = 0.5 * (self.u_grid[x, y+1] + self.u_grid[x, y-1] - 2 * u_1) / dx2
-                trd = self.ro_grid[x, y]
-                s += (u_1 * dx2) * (fst + snd + self.ro_grid[x, y])
-        return -1*s
+        dx2 = self.dx ** 2
+
+        # Calculate the shifted potential at the central point (i, j)
+        u_ij = self.u_grid[i, j] + dlt
+
+        # Loop through the 3x3 neighborhood
+        for x in range(i - 1, i + 2):
+            for y in range(j - 1, j + 2):
+                fst = 0.5 * ((self.u_grid[x + 1, y] + self.u_grid[x - 1, y] - 2 * self.u_grid[x,y]) / dx2)
+                snd = 0.5 * ((self.u_grid[x, y + 1] + self.u_grid[x, y - 1] - 2 * self.u_grid[x,y]) / dx2)
+                trd = self.ro_grid[x, y] * u_ij
+                
+                # Accumulate the local functional S contribution
+                s += (fst + snd + trd) * dx2 * u_ij
+
+        # Return the negative of the accumulated value as per definition
+        return -s
 
         
     def _u_point_updater(self, i,j,S0, dlts=[0,0.5,1]):
@@ -161,27 +172,28 @@ class PS2DFunctionalMinimization(PoissonSolver2D):
         if abs(i) >= self.size-1 or abs(j) >= self.size-1 or i<=0 or j<=0:
             raise ValueError(f"i={i} or j={j} out of grid size index that is in (0, {self.size-1})!") 
         
-        S1 = S0 - self._s_conv_loc(i,j,0) + self._s_conv_loc(i,j,dlts[0])
-        S2 = S0 - self._s_conv_loc(i,j,0) + self._s_conv_loc(i,j,dlts[1])
-        S3 = S0 - self._s_conv_loc(i,j,0) + self._s_conv_loc(i,j,dlts[2])
-        # Calculate the denominator for dlt4
+        print(dlts[0], dlts[1], dlts[2])
+        S_base = self._s_conv_loc(i, j, 0)
+        S1 = S0 - S_base + self._s_conv_loc(i,j,dlts[0])
+        S2 = S0 - S_base + self._s_conv_loc(i,j,dlts[1])
+        S3 = S0 - S_base + self._s_conv_loc(i,j,dlts[2])
+        print("S1", S1)
+        print("S2", S2)
+        print("S3", S3)
+        
+        # Wyznaczanie mianownika do obliczenia dlt4
         denominator = (S1 - 2 * S2 + S3)
-        # Check if the denominator is zero (or close to zero)
+
+        # Unikanie problemów z dzieleniem przez zero
         if abs(denominator) < 1e-10:
-            # Handle division by zero case
-            print("Warning: Division by zero encountered in dlt4 calculation.")
-            dlt4 = 0  # or some other small default value
+            dlt4 = np.mean(dlts)  # Ustaw wartość średnią z delt
         else:
-            # Safe calculation
             dlt4 = 0.25 * (3 * S1 - 4 * S2 + S3) / denominator
 
-        S4 = S0 - self._s_conv_loc(i,j,0) + self._s_conv_loc(i,j,dlt4)
-        #create a array of Si
-        Sarray = np.array([S1,S2,S3,S4])
-        dltas = dlts[:]
-        dltas.append(dlt4)
-        #array for deltas
-        deltas = np.array(dltas)
+        S4 = S0 - S_base + self._s_conv_loc(i,j,dlt4)
+        #chose the right delta
+        Sarray = np.array([S1, S2, S3, S4])
+        deltas = np.array(dlts + [dlt4])
         i_min = np.argmin(Sarray)
         delta_fin = deltas[i_min]
 
@@ -196,11 +208,15 @@ class PS2DFunctionalMinimization(PoissonSolver2D):
         S0 = self.s_conv()
         # Create a copy to avoid overwriting during iteration
         new_u = self.u_grid.copy()
-        for i in range(1, self.size - 1):
-            for j in range(1, self.size - 1):
-                new_u[i, j] = self._u_point_updater(i,j,S0, dlts)
-        self.u_grid = new_u
+        for i in range(1, self.size - 2):
+            for j in range(1, self.size - 2):
+                new_u[i, j] = self._u_point_updater(i,j,S0, dlts = [0,0.5,1])
+        self.u_grid = new_u.copy()
 
     def update(self):
         self._update_u_grid()
         self.nr_iterations +=1 
+
+
+
+
