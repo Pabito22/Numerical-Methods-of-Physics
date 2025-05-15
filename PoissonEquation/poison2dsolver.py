@@ -21,6 +21,8 @@ class PoissonSolver2D():
         """
         Returns the charge density for a position (x,y).
         x,y (int): values that are in range [-N,N]
+        REMEMBER TO UPDATE THE x,y values from [0,2N+1]
+        to valus in range [-N, N]!!!!
         """
         exp1 = np.exp(-((x-x0)**2+y**2)/(d**2))
         exp2 = np.exp(-((x+x0)**2+y**2)/(d**2))
@@ -112,111 +114,57 @@ class PoissonSolver2DFast(PoissonSolver2D):
                                 self.u_grid[i,j+1] + self.u_grid[i, j-1]+
                                 self.ro_grid[i,j]*self.dx**2))/4
 
-
-
-
-
-
-
-class PS2DFunctionalMinimization(PoissonSolver2D):
-    """ 
-    Solve the 2D poisson equation, by the method described 
-    in task 3.
+class PoissonSolver3(PoissonSolver2D):
+    """
+    Solve the 2D poisson equation using local functional minimization (task 3).
     """
     def __init__(self, N=31, dx=1):
         super().__init__(N, dx)
-    
-    def _s_conv_loc(self, i,j, dlt=0):
-        """
-         Calcuates the local value of the functional S
-         at the point (i,j), in order to then update
-         u_grid values at the [i,j] point.
-         Params:
-         i (int): x position, all grid, but no at boundaries
-         j (int): y position, all grid, but no at boundaries
-         dlt (float): value, by which the u value will be shifted
-         Return:
-         The local S value around the point [i,j]
-        """
-        #check if the values are in the range defined by the grid and out of boundaries
-        if abs(i) >= self.size-1 or abs(j) >= self.size-1 or i<=0 or j<=0:
-            raise ValueError(f"i={i} or j={j} out of grid size index that is in (0, {self.size-1})!") 
-        s = 0
-        dx2 = self.dx ** 2
 
-        # Calculate the shifted potential at the central point (i, j)
-        u_ij = self.u_grid[i, j] + dlt
+    def _Sloc(self, i, j, dlt):
+        # compute local S value after perturbing u_grid[i,j] by dlt
+        u0 = self.u_grid[i, j]
+        self.u_grid[i, j] = u0 + dlt
+        Sloc = 0.0
+        dx2 = self.dx**2
+        for ii in (i-1, i, i+1):
+            for jj in (j-1, j, j+1):
+                lapx = (self.u_grid[ii+1, jj] + self.u_grid[ii-1, jj] - 2*self.u_grid[ii, jj]) / dx2
+                lapy = (self.u_grid[ii, jj+1] + self.u_grid[ii, jj-1] - 2*self.u_grid[ii, jj]) / dx2
+                Sloc -= (0.5 * self.u_grid[ii, jj] * (lapx + lapy)
+                         + self.ro_grid[ii, jj] * self.u_grid[ii, jj]) * dx2
+        # restore the original value
+        self.u_grid[i, j] = u0
+        return Sloc
 
-        # Loop through the 3x3 neighborhood
-        for x in range(i - 1, i + 2):
-            for y in range(j - 1, j + 2):
-                fst = 0.5 * ((self.u_grid[x + 1, y] + self.u_grid[x - 1, y] - 2 * self.u_grid[x,y]) / dx2)
-                snd = 0.5 * ((self.u_grid[x, y + 1] + self.u_grid[x, y - 1] - 2 * self.u_grid[x,y]) / dx2)
-                trd = self.ro_grid[x, y] * u_ij
-                
-                # Accumulate the local functional S contribution
-                s += (fst + snd + trd) * dx2 * u_ij
+    def _u_point_update(self, i, j, deltas, S0):
+        # original value
+        u0 = self.u_grid[i, j]
+        # compute S at baseline (delta=0)
+        Sloc0 = self._Sloc(i, j, 0.0)
+        # compute S for each delta in list
+        S_vals = [self._Sloc(i, j, d) for d in deltas]
+        # extrapolate a 4th delta via finite-difference
+        S1, S2, S3 = S_vals
+        num = 3*S1 - 4*S2 + S3
+        den = S1 - 2*S2 + S3
+        delta4 = 0.25 * num/den if abs(den) > 1e-12 else 0.0
+        # compute S at delta4
+        S4 = self._Sloc(i, j, delta4)
+        # choose best delta among all
+        candidates = list(zip(deltas, S_vals)) + [(delta4, S4)]
+        delta_best, _ = min(candidates, key=lambda x: x[1])
+        # update the grid point with best delta
+        self.u_grid[i, j] = u0 + delta_best
+        return self.u_grid[i, j]
 
-        # Return the negative of the accumulated value as per definition
-        return -s
-
-        
-    def _u_point_updater(self, i,j,S0, dlts=[0,0.5,1]):
-        """
-        Finds the right delta to update the grid at point 
-        u_grid[i,j] and returns the updated balue for the position [i,j].
-        dlts (list) : values of dlts to be used 
-        S0 (float) : S value for one iteration trough the whole grid
-        """
-        #check if the values are in the range defined by the grid and out of boundaries
-        if abs(i) >= self.size-1 or abs(j) >= self.size-1 or i<=0 or j<=0:
-            raise ValueError(f"i={i} or j={j} out of grid size index that is in (0, {self.size-1})!") 
-        
-        print(dlts[0], dlts[1], dlts[2])
-        S_base = self._s_conv_loc(i, j, 0)
-        S1 = S0 - S_base + self._s_conv_loc(i,j,dlts[0])
-        S2 = S0 - S_base + self._s_conv_loc(i,j,dlts[1])
-        S3 = S0 - S_base + self._s_conv_loc(i,j,dlts[2])
-        print("S1", S1)
-        print("S2", S2)
-        print("S3", S3)
-        
-        # Wyznaczanie mianownika do obliczenia dlt4
-        denominator = (S1 - 2 * S2 + S3)
-
-        # Unikanie problemów z dzieleniem przez zero
-        if abs(denominator) < 1e-10:
-            dlt4 = np.mean(dlts)  # Ustaw wartość średnią z delt
-        else:
-            dlt4 = 0.25 * (3 * S1 - 4 * S2 + S3) / denominator
-
-        S4 = S0 - S_base + self._s_conv_loc(i,j,dlt4)
-        #chose the right delta
-        Sarray = np.array([S1, S2, S3, S4])
-        deltas = np.array(dlts + [dlt4])
-        i_min = np.argmin(Sarray)
-        delta_fin = deltas[i_min]
-
-        return self.u_grid[i,j] + delta_fin
-    
-    def _update_u_grid(self, dlts=[0,0.5,1]):
-        """
-        Update the ro_grid_prim on the basis of u_grid in order
-        to check the quality of the solution.
-        Boundaries 0!
-        """
-        S0 = self.s_conv()
-        # Create a copy to avoid overwriting during iteration
-        new_u = self.u_grid.copy()
-        for i in range(1, self.size - 2):
-            for j in range(1, self.size - 2):
-                new_u[i, j] = self._u_point_updater(i,j,S0, dlts = [0,0.5,1])
-        self.u_grid = new_u.copy()
-
-    def update(self):
-        self._update_u_grid()
-        self.nr_iterations +=1 
-
-
-
-
+    def update(self, deltas=[0.0, 0.5, 1.0]):
+        # global convergence functional S (unused in point update but can monitor)
+        S_total = self.s_conv()
+        Nbound = self.size - 1
+        # update interior points excluding 2-layer boundary offset
+        for i in range(2, Nbound-1):
+            for j in range(2, Nbound-1):
+                self._u_point_update(i, j, deltas, S0=S_total)
+        # increment iteration count
+        self.nr_iterations += 1
