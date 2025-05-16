@@ -82,7 +82,7 @@ class PoissonSolver2D():
                 fst = 0.5 * (self.u_grid[x+1, y] + self.u_grid[x-1, y] - 2 * u_1) / dx2
                 snd = 0.5 * (self.u_grid[x, y+1] + self.u_grid[x, y-1] - 2 * u_1) / dx2
                 trd = self.ro_grid[x, y]
-                s += (u_1 * dx2) * (fst + snd + self.ro_grid[x, y])
+                s += (u_1 * dx2) * (fst + snd + trd)
         return -s
     
     def update(self):
@@ -91,6 +91,7 @@ class PoissonSolver2D():
         self.nr_iterations +=1 
 
     
+
 class PoissonSolver2DFast(PoissonSolver2D):
     """
     Solves 2D Poisson equation, with alternative way to 
@@ -113,6 +114,8 @@ class PoissonSolver2DFast(PoissonSolver2D):
                                 (self.u_grid[i+1,j] + self.u_grid[i-1, j]+
                                 self.u_grid[i,j+1] + self.u_grid[i, j-1]+
                                 self.ro_grid[i,j]*self.dx**2))/4
+
+
 
 class PoissonSolver3(PoissonSolver2D):
     """
@@ -168,3 +171,53 @@ class PoissonSolver3(PoissonSolver2D):
                 self._u_point_update(i, j, deltas, S0=S_total)
         # increment iteration count
         self.nr_iterations += 1
+
+
+
+
+class PoissonSolver5(PoissonSolver2D):
+    """Solves 2D Poisson eq. via random local probes reducing the S functional."""
+
+    def __init__(self, r=0.1, N=31, dx=1.0, max_probes=100):
+        super().__init__(N, dx)
+        self.r = r
+        self.max_probes = max_probes
+
+    def _Sloc(self, i, j):
+        """Local contribution to S at (i,j) using current u_grid."""
+        dx2 = self.dx**2
+        Sloc = 0.0
+        for ii in (i-1, i, i+1):
+            for jj in (j-1, j, j+1):
+                lapx = (self.u_grid[ii+1, jj] + self.u_grid[ii-1, jj] - 2*self.u_grid[ii, jj]) / dx2
+                lapy = (self.u_grid[ii, jj+1] + self.u_grid[ii, jj-1] - 2*self.u_grid[ii, jj]) / dx2
+                Sloc -= (0.5 * self.u_grid[ii, jj] * (lapx + lapy)
+                         + self.ro_grid[ii, jj] * self.u_grid[ii, jj]) * dx2
+        return Sloc
+
+    def _find_u_point_val(self, i, j):
+        """Try up to max_probes random deltas; return first that decreases local S, else 0."""
+        u0 = self.u_grid[i, j]
+        Sloc0 = self._Sloc(i, j)
+        for _ in range(self.max_probes):
+            delta = np.random.uniform(-self.r, self.r)
+            self.u_grid[i, j] = u0 + delta
+            if self._Sloc(i, j) < Sloc0:
+                return delta
+        # revert and give up
+        self.u_grid[i, j] = u0
+        return 0.0
+
+    def _update_u_grid(self):
+        """One sweep: update each interior grid point by random probe decreasing S locally."""
+        # iterate interior points (exclude boundaries)
+        for i in range(1, self.size-2):
+            for j in range(1, self.size-2):
+                delta = self._find_u_point_val(i, j)
+                # apply successful delta (already applied inside _find), nothing else needed
+
+    def update(self):
+        """Perform a full iteration and increment counter."""
+        self._update_u_grid()
+        self.nr_iterations += 1
+
