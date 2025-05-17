@@ -12,34 +12,34 @@ This file provides a suite of solver classes for the two‑dimensional Poisson e
 
 - **`PoissonSolver1`** (Jacobi relaxation)  
   - Standard five‑point stencil Jacobi update:  
-    \[
+    $
       u_{i,j} \leftarrow \frac{1}{4}\Bigl(u_{i+1,j}+u_{i-1,j}+u_{i,j+1}+u_{i,j-1} + \rho_{i,j} \, dx^2\Bigr).
-    \]  
+    $  
   - Computes a residual grid (`ro_grid_prim`) to monitor convergence.
 
 - **`PoissonSolver2`** (Successive Over‑Relaxation, SOR)  
   - Weighted Jacobi (SOR) update with relaxation factor ω:  
-    \[
+    $
       u_{i,j} \leftarrow (1-\omega)\,u_{i,j} + \frac{\omega}{4}\Bigl(\dots\Bigr).
-    \]  
+    $  
   - Faster convergence than pure Jacobi for optimal ω ∈ (1,2).
 
 - **`PoissonSolver3`** (Local functional minimization)  
-  - At each interior point, probes a small set of discrete offsets \(\{d_0,d_1,d_2\}\) and extrapolates a fourth via finite differences.
-  - Chooses the offset that minimizes the local action \(S\).
+  - At each interior point, probes a small set of discrete offsets $\{d_0,d_1,d_2\}$ and extrapolates a fourth via finite differences.
+  - Chooses the offset that minimizes the local action $S$.
 
 - **`PoissonSolver4`** (Steepest‑descent on \(S\))  
-  - Finite‐difference approximation of \(\partial S/\partial u_{i,j}\) via \(S(u\pm d)\).
-  - Updates \(u_{i,j}\leftarrow u_{i,j}-\beta\,\partial S/\partial u_{i,j}\), with β tuned for fastest convergence.
+  - Finite‐difference approximation of $\partial S/\partial u_{i,j}\) via \(S(u\pm d)$.
+  - Updates $u_{i,j}\leftarrow u_{i,j}-\beta\,\partial S/\partial u_{i,j}$, with β tuned for fastest convergence.
 
 - **`PoissonSolver5`** (Stochastic probe minimization)  
-  - Randomly samples offsets \(\delta\in[-r,r]\) at each grid point, accepts the first that lowers the local action.
+  - Randomly samples offsets $\delta\in[-r,r]$ at each grid point, accepts the first that lowers the local action.
   - Can escape shallow local minima and offers an alternative convergence path.
 
 ## Features
 
 - **Modular design** via an abstract base class—new relaxation or minimization schemes can be added by subclassing `PoissonSolver2D`.
-- **Convergence monitoring** through the action functional \(S\) and, for Jacobi/SOR, the discrete residual grid.
+- **Convergence monitoring** through the action functional $S$ and, for Jacobi/SOR, the discrete residual grid.
 - **Performance comparison**: easily benchmark iterations‐to‐tolerance across all five methods.
 
 ## Usage
