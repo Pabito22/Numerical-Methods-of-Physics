@@ -1,7 +1,3 @@
-<script type="text/javascript" async
-  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
-</script>
-
 # Numerical Methods of Physics
 
 ## Poisson Equation
@@ -18,37 +14,31 @@ This file provides a suite of solver classes for the two-dimensional Poisson equ
 
 * **`PoissonSolver1`** (Jacobi relaxation)
 
-  * Standard five-point stencil Jacobi update:
-
-    <p style="text-align:center">\[ u_{i,j} \leftarrow \frac{1}{4}\Bigl(u_{i+1,j}+u_{i-1,j}+u_{i,j+1}+u_{i,j-1} + \rho_{i,j} \, dx^2\Bigr). \]</p>  
+  * Uses the standard five-point stencil Jacobi update, averaging neighboring grid values and adding the source term.
   * Computes a residual grid (`ro_grid_prim`) to monitor convergence.
 
 * **`PoissonSolver2`** (Successive Over-Relaxation, SOR)
 
-  * Weighted Jacobi (SOR) update with relaxation factor $\omega$:
-
-    <p style="text-align:center">\[ u_{i,j} \leftarrow (1-\omega)\,u_{i,j} + \frac{\omega}{4}\Bigl(\dots\Bigr). \]</p>  
-  * Faster convergence than pure Jacobi for optimal $\omega \in (1,2)$.
+  * Applies a weighted Jacobi update using a relaxation factor to accelerate convergence.
+  * Typically converges faster than pure Jacobi when the relaxation factor is between 1 and 2.
 
 * **`PoissonSolver3`** (Local functional minimization)
 
-  * At each interior point, probes a small set of discrete offsets $\{d_0,d_1,d_2\}$ and extrapolates a fourth via finite differences.
-  * Chooses the offset that minimizes the local action $S$.
+  * Examines a set of discrete offsets around each point and chooses the one that minimizes the local action.
 
-* **`PoissonSolver4`** (Steepest-descent on $S$)
+* **`PoissonSolver4`** (Steepest-descent minimization)
 
-  * Finite-difference approximation of $\frac{\partial S}{\partial u_{i,j}}$ via $S(u\pm d)$.
-  * Updates $u_{i,j}\leftarrow u_{i,j}-\beta\,\frac{\partial S}{\partial u_{i,j}}$, with $\beta$ tuned for fastest convergence.
+  * Computes the gradient of the action with respect to the grid values and updates in the direction that reduces the action.
 
 * **`PoissonSolver5`** (Stochastic probe minimization)
 
-  * Randomly samples offsets $\delta\in[-r,r]$ at each grid point, accepts the first that lowers the local action.
-  * Can escape shallow local minima and offers an alternative convergence path.
+  * Randomly probes small offsets at each grid point and accepts changes that lower the action.
+  * Useful for escaping shallow local minima and exploring the solution space differently.
 
 ## Features
 
 * **Modular design** via an abstract base class—new relaxation or minimization schemes can be added by subclassing `PoissonSolver2D`.
-* **Convergence monitoring** through the action functional $S$ and, for Jacobi/SOR, the discrete residual grid.
+* **Convergence monitoring** through the action functional and, for Jacobi/SOR, the discrete residual grid.
 * **Performance comparison**: easily benchmark iterations-to-tolerance across all five methods.
 
 ## Usage
@@ -69,8 +59,8 @@ print(f"Converged in {solver.nr_iterations} iterations.")
 
 ## Plotting & Analysis
 
-* Use `solver.s_conv()` to obtain the current action $S$.
-* Compare $S$ vs. iteration for different methods or parameter choices ($\omega$, $\beta$, etc.).
+* Use `solver.s_conv()` to obtain the current action.
+* Compare the action versus iteration for different methods or parameter choices.
 * Visualize `solver.u_grid` with Matplotlib or your preferred plotting library.
 
 ## Dependencies
