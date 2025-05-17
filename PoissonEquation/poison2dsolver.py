@@ -242,16 +242,45 @@ class PoissonSolver2(PoissonSolver2D):
 
 class PoissonSolver3(PoissonSolver2D):
     """
-    Solve the 2D poisson equation using local functional minimization (task 3).
+    Task 3: Local functional‐minimization solver for the 2D Poisson equation.
+
+    At each grid point, we perform a local search over discrete perturbations
+    of the potential u_{i,j} to minimize the action functional S.  This
+    combines finite‐difference estimates of S with a small set of probe
+    values to choose the optimal local update.
     """
+
     def __init__(self, N=31, dx=1, deltas = [0.0, 0.5, 1.0]):
+        """
+        Initialize the local minimization solver.
+
+        Parameters
+        ----------
+        N : int
+            Half‐extent of the grid (total size = 2N+1).
+        dx : float
+            Grid spacing.
+        deltas : list of float, optional
+            List of probe offsets [d0, d1, d2] to test for each u[i,j].
+            Must have length ≤ 3.  Default probes are [0.0, 0.5, 1.0].
+        """
         super().__init__(N, dx)
         if len(deltas) > 3:
             raise ValueError("len(deltas) > 3!!, should be smaller!")
         self.deltas = deltas
 
     def _Sloc(self, i, j, dlt):
-        # compute local S value after perturbing u_grid[i,j] by dlt
+        """
+        Compute the local action S after perturbing u[i,j] by dlt.
+
+        Temporarily add dlt to u_grid[i,j], sum the contribution of the
+        3×3 neighborhood to the discrete action, then restore u[i,j].
+
+        Returns
+        -------
+        float
+            The local action S at (i,j) with u[i,j] → u[i,j] + dlt.
+        """
         u0 = self.u_grid[i, j]
         self.u_grid[i, j] = u0 + dlt
         Sloc = 0.0
@@ -267,6 +296,27 @@ class PoissonSolver3(PoissonSolver2D):
         return Sloc
 
     def _u_point_update(self, i, j,S0):
+        """
+        Find the optimal local update for u[i,j] by testing probe offsets.
+
+        Steps:
+        1. Evaluate S at u + each probe d ∈ self.deltas.
+        2. Use three probe values to extrapolate a 4th candidate via finite‐differences.
+        3. Compute S at the extrapolated offset.
+        4. Choose the offset that yields the minimum local S, and update u[i,j].
+
+        Parameters
+        ----------
+        i, j : int
+            Indices of the grid point to update.
+        S0 : float
+            (Unused) The global action S before any local changes; provided for API symmetry.
+
+        Returns
+        -------
+        float
+            The new value of u[i,j] after applying the best probe offset.
+        """
         deltas = self.deltas
         # original value
         u0 = self.u_grid[i, j]
@@ -289,6 +339,12 @@ class PoissonSolver3(PoissonSolver2D):
         return self.u_grid[i, j]
     
     def _update_u_grid(self):
+        """
+        Perform one global iteration by applying local minimization at each interior point.
+
+        1. Compute the global action S_total (optional for diagnostics).
+        2. For each interior i,j (excluding a one‐cell boundary), call _u_point_update.
+        """
         S_total = self.s_conv()
         deltas = self.deltas
         Nbound = self.size - 1
@@ -298,6 +354,11 @@ class PoissonSolver3(PoissonSolver2D):
                 self._u_point_update(i, j, S0=S_total)
 
     def update(self):
+        """
+        Advance the solver by one full iteration:
+        - Execute one sweep of local minimization across the grid.
+        - Increment the iteration counter.
+        """
         self._update_u_grid()
         # increment iteration count
         self.nr_iterations += 1
@@ -306,27 +367,27 @@ class PoissonSolver3(PoissonSolver2D):
 
 class PoissonSolver4(PoissonSolver2D):
     """
-    Task 3: Local functional‐minimization solver for the 2D Poisson equation.
+    Task 4: Gradient‐descent minimization of the action S for the 2D Poisson equation.
 
-    At each grid point, we perform a local search over discrete perturbations
-    of the potential u_{i,j} to minimize the action functional S.  This
-    combines finite‐difference estimates of S with a small set of probe
-    values to choose the optimal local update.
+    At each grid point, we approximate the partial derivative ∂S/∂u_{i,j}
+    by finite differences using S(u+d) and S(u−d), then step opposite to the gradient
+    with step size β. This is equivalent to a local steepest‐descent update.
     """
 
     def __init__(self, N=31, dx=1, beta = 0.4, d=0.001):
         """
-        Initialize the local minimization solver.
+        Initialize the steepest‐descent solver.
 
         Parameters
         ----------
         N : int
-            Half‐extent of the grid (total size = 2N+1).
+            Half‐extent of the grid (total grid size = 2N+1).
         dx : float
             Grid spacing.
-        deltas : list of float, optional
-            List of probe offsets [d0, d1, d2] to test for each u[i,j].
-            Must have length ≤ 3.  Default probes are [0.0, 0.5, 1.0].
+        beta : float
+            Descent step parameter; must satisfy 0 < β < 0.5 for stability.
+        d : float
+            Finite‐difference probe size used to approximate the local gradient.
         """
         super().__init__(N, dx)
         if beta < 0:
@@ -336,15 +397,10 @@ class PoissonSolver4(PoissonSolver2D):
     
     def _Sloc(self, i, j):
         """
-        Compute the local action S after perturbing u[i,j] by dlt.
+        Compute the local action S in the 3×3 neighborhood around (i,j)
+        using the current u_grid values.
 
-        Temporarily add dlt to u_grid[i,j], sum the contribution of the
-        3×3 neighborhood to the discrete action, then restore u[i,j].
-
-        Returns
-        -------
-        float
-            The local action S at (i,j) with u[i,j] → u[i,j] + dlt.
+        This reuses the same finite‐difference Laplacian logic as other solvers.
         """
         dx2 = self.dx**2
         Sloc = 0.0
@@ -358,25 +414,11 @@ class PoissonSolver4(PoissonSolver2D):
     
     def _update_u_point(self, i, j):
         """
-        Find the optimal local update for u[i,j] by testing probe offsets.
+        Compute the new potential at (i,j) by a finite‐difference descent step.
 
-        Steps:
-        1. Evaluate S at u + each probe d ∈ self.deltas.
-        2. Use three probe values to extrapolate a 4th candidate via finite‐differences.
-        3. Compute S at the extrapolated offset.
-        4. Choose the offset that yields the minimum local S, and update u[i,j].
-
-        Parameters
-        ----------
-        i, j : int
-            Indices of the grid point to update.
-        S0 : float
-            (Unused) The global action S before any local changes; provided for API symmetry.
-
-        Returns
-        -------
-        float
-            The new value of u[i,j] after applying the best probe offset.
+        1. Evaluate S_plus = S(u+d) and S_minus = S(u−d).
+        2. Approximate the partial derivative ∂S/∂u_{i,j} ≈ (S_plus − S_minus)/(2d).
+        3. Return u0 − β * ∂S/∂u_{i,j}.
         """
         B = self.beta
         d = self.d
@@ -401,10 +443,8 @@ class PoissonSolver4(PoissonSolver2D):
         
     def _update_u_grid(self):
         """
-        Perform one global iteration by applying local minimization at each interior point.
-
-        1. Compute the global action S_total (optional for diagnostics).
-        2. For each interior i,j (excluding a one‐cell boundary), call _u_point_update.
+        Perform one full descent sweep: update each interior grid point
+        by computing its new value via _update_u_point.
         """
         # iterate interior points (exclude boundaries)
         for i in range(1, self.size-2):
@@ -413,8 +453,8 @@ class PoissonSolver4(PoissonSolver2D):
     
     def update(self):
         """
-        Advance the solver by one full iteration:
-        - Execute one sweep of local minimization across the grid.
+        Advance the solver by one iteration:
+        - Execute a steepest‐descent sweep over the interior.
         - Increment the iteration counter.
         """
         self._update_u_grid()
