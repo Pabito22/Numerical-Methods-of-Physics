@@ -1,7 +1,7 @@
 # Numerical Methods of Physics
 
 ## Poisson Equation
-
+This folder contains solutions to tasks outlined in the poi.pdf file. Each Jupyter notebook provides solutions to tasks 1, 2, 3, 4, and 5. The file poisson2dsolver.py contains the implementation of various methods.
 ### 2D Poisson Equation Solver
 
 This file provides a suite of solver classes for the two-dimensional Poisson equation on a square grid. The solvers are organized under an abstract base class and implement a variety of iterative relaxation and minimization methods:
