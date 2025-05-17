@@ -174,6 +174,69 @@ class PoissonSolver3(PoissonSolver2D):
 
 
 
+class PoissonSolver4(PoissonSolver2D):
+    """Solve 2d poisson equation, by the method described in task4."""
+
+    def __init__(self, N=31, dx=1, beta = 0.4, d=0.001):
+        """beta (float): iteration parameter < 0.5
+           d (float) : value, by which we will be changing the u(i,j), to calculate divS."""
+        super().__init__(N, dx)
+        if beta < 0:
+            raise ValueError("beta must be bigger than 0!")
+        self.beta = beta
+        self.d = d
+    
+    def _Sloc(self, i, j):
+        """Local contribution to S at (i,j) using current u_grid."""
+        dx2 = self.dx**2
+        Sloc = 0.0
+        for ii in (i-1, i, i+1):
+            for jj in (j-1, j, j+1):
+                lapx = (self.u_grid[ii+1, jj] + self.u_grid[ii-1, jj] - 2*self.u_grid[ii, jj]) / dx2
+                lapy = (self.u_grid[ii, jj+1] + self.u_grid[ii, jj-1] - 2*self.u_grid[ii, jj]) / dx2
+                Sloc -= (0.5 * self.u_grid[ii, jj] * (lapx + lapy)
+                         + self.ro_grid[ii, jj] * self.u_grid[ii, jj]) * dx2
+        return Sloc
+    
+    def _update_u_point(self, i, j):
+        """
+        Returns the new value for u_grid at the point (i,j).
+        return: u[i,j] - beta*divS
+        """
+        B = self.beta
+        d = self.d
+        #Save the value of u at (i,j) before doing anything
+        u0_ij = self.u_grid[i,j]
+        #Update the u(i,j) by d
+        self.u_grid[i,j] += d
+        #get S+ value
+        S_plus = self._Sloc(i,j)
+        #get the old val for u[i,j]
+        self.u_grid[i,j] = u0_ij
+        #Update the u(i,j) by -d
+        self.u_grid[i,j] -= d
+        #get the S- value 
+        S_minus = self._Sloc(i,j)
+
+        #get the divS
+        divS = (S_plus - S_minus) / (2*d)
+
+        #Returns the new value for u[i,j]
+        return u0_ij - B*divS
+        
+    def _update_u_grid(self):
+        """One sweep: update each interior grid point by the new value for u,
+        Calculated by the method from task 4."""
+        # iterate interior points (exclude boundaries)
+        for i in range(1, self.size-2):
+            for j in range(1, self.size-2):
+                self.u_grid[i,j] = self._update_u_point(i,j)
+    
+    def update(self):
+        self._update_u_grid()
+        self.nr_iterations += 1
+
+
 
 class PoissonSolver5(PoissonSolver2D):
     """Solves 2D Poisson eq. via random local probes reducing the S functional."""
