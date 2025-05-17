@@ -44,7 +44,7 @@ This file provides a suite of solver classes for the two-dimensional Poisson equ
 ## Usage
 
 ```python
-from poisson import PoissonSolver1, PoissonSolver2, PoissonSolver3, PoissonSolver4, PoissonSolver5
+from poisson2dsolver import PoissonSolver1, PoissonSolver2, PoissonSolver3, PoissonSolver4, PoissonSolver5
 
 # Create poissson2dsolver instance (choose your method)
 solver = PoissonSolver2(N=50, dx=0.1, w=1.8)
