@@ -1,10 +1,12 @@
 # Numerical Methods of Physics
 
+This repository contains solutions to tasks from numerical methods courses at AGH, focusing on computational techniques used in physics. The projects include implementations and simulations for two main topics:
+
 ## Poisson Equation
 
 ### 2D Poisson Equation Solver
 
-This file provides a suite of solver classes for the two-dimensional Poisson equation on a square grid. The solvers are organized under an abstract base class and implement a variety of iterative relaxation and minimization methods:
+This module provides a suite of solver classes for the two-dimensional Poisson equation on a square grid. The solvers are organized under an abstract base class and implement various iterative relaxation and minimization methods:
 
 * **`PoissonSolver2D`** (abstract base class)
   Defines the grid setup, source-term initialization, and convergence functional. Subclasses must implement:
@@ -68,3 +70,7 @@ print(f"Converged in {solver.nr_iterations} iterations.")
 * Python 3.7+
 * NumPy
 * (Optional: Matplotlib for plotting convergence curves and potential fields.)
+
+## Ion Trap Project
+
+This module simulates the electric potential in an ion trap configuration using numerical methods. It models the trapping behavior and potential distribution relevant for experimental setups in atomic and plasma physics.
